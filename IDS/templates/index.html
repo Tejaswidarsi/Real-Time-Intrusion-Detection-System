@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time IDS Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .section { margin-bottom: 20px; }
+        .alert { color: red; font-weight: bold; }
+        .ok { color: green; font-weight: bold; }
+        pre { background: #f0f0f0; padding: 10px; border-radius: 3px; overflow-x: auto; max-height: 200px; overflow-y: auto; }
+        .packet-container { border: 1px solid #ddd; padding: 10px; margin-bottom: 15px; }
+        .packet-header { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Real-Time Intrusion Detection System</h1>
+        <div id="packet-list"></div>
+    </div>
+
+    <script>
+        let packetHistory = []; // Store all packets
+
+        function updateData() {
+            fetch('/data')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Received data:', data);
+                    if (data.length > 0) {
+                        // Append new packets, avoiding duplicates by time
+                        data.forEach(item => {
+                            if (!packetHistory.some(p => p.time === item.time)) {
+                                packetHistory.push(item);
+                            }
+                        });
+                        // Sort by time (newest first)
+                        packetHistory.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+                        const packetListDiv = document.getElementById('packet-list');
+                        packetListDiv.innerHTML = ''; // Clear existing content
+
+                        packetHistory.forEach((item, index) => {
+                            const packetDiv = document.createElement('div');
+                            packetDiv.className = 'packet-container';
+                            packetDiv.innerHTML = `
+                                <div class="packet-header">Packet ${index + 1}</div>
+                                <div class="section">
+                                    <h2>Latest Prediction</h2>
+                                    <p class="${item.prediction.includes('Attack') ? 'alert' : 'ok'}">${item.prediction}</p>
+                                    <p>Last updated: ${item.time}</p>
+                                </div>
+                                <div class="section">
+                                    <h2>Raw Input Data</h2>
+                                    <pre>${JSON.stringify(item.raw_data, null, 2)}</pre>
+                                </div>
+                                <div class="section">
+                                    <h2>Scaled Features</h2>
+                                    <pre>${JSON.stringify(item.scaled_features, null, 2)}</pre>
+                                </div>
+                                <div class="section">
+                                    <h2>Prediction Probabilities [Normal, Attack]</h2>
+                                    <pre>${JSON.stringify(item.probabilities, null, 2)}</pre>
+                                </div>
+                            `;
+                            packetListDiv.appendChild(packetDiv);
+                        });
+                    } else {
+                        const packetListDiv = document.getElementById('packet-list');
+                        if (packetHistory.length === 0) {
+                            packetListDiv.innerHTML = '<p class="ok">Waiting for data...</p><p>Last updated: N/A</p>';
+                        }
+                    }
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        // Update every 1 second
+        setInterval(updateData, 1000);
+        updateData(); // Initial call
+    </script>
+</body>
+</html>
